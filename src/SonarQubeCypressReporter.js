@@ -1,12 +1,12 @@
-const xmlbuilder = require("xmlbuilder");
-const Mocha = require("mocha");
+const xmlbuilder = require('xmlbuilder');
+const Mocha = require('mocha');
 const {
+    DEFAULT_OUTPUT_DIR,
     extractSpecFromSuite,
     extractTitleFromSuite,
     formatTest,
-    writeFile,
-    hasSpecInTitle
-} = require("./ReporterUtils");
+    writeFile
+} = require('./ReporterUtils');
 
 
 // Mocha runner events
@@ -16,12 +16,12 @@ const {
 
 // the default reporter options
 const defaultOptions = {
-    outputDir: "./dist",
+    outputDir: DEFAULT_OUTPUT_DIR,
     preserveSpecsDir: true,
     overwrite: false,
-    prefix: "",
+    prefix: '',
     useFullTitle: true,
-    titleSeparator: " - ",
+    titleSeparator: ' - ',
     useAbsoluteSpecPath: false
 };
 
@@ -39,7 +39,7 @@ class SonarQubeCypressReporter {
      */
     constructor(runner, options) {
         this.options = Object.assign(defaultOptions, options.reporterOptions);
-        this.specFilename = "none";
+        this.specFilename = 'none';
 
         runner.once(EVENT_RUN_END, () => {
             this.onDone(runner);
@@ -52,9 +52,9 @@ class SonarQubeCypressReporter {
      * @param {object} runner the Mocha runner
      */
     onDone(runner) {
-        const node = xmlbuilder.create("testExecutions", { encoding: "utf-8" })
-            .attribute("version", 1)
-            .element("file");
+        const node = xmlbuilder.create('testExecutions', { encoding: 'utf-8' })
+            .attribute('version', 1)
+            .element('file');
         this.traverseSuite(node, runner.suite);
         const xml = node.end({ pretty: true });
         writeFile(this.specFilename, xml, this.options);

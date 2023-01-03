@@ -1,27 +1,28 @@
-const colors = require("colors");
-const fse = require("fs-extra");
-const path = require("path");
+const chalk = require('chalk');
+const fse = require('fs-extra');
+const path = require('path');
+const pkg = require('../package.json');
 
 
 /**
- * Log "info" message to the console
+ * Log 'info' message to the console
  *
- * @param {string} message
+ * @param {string} message the info message to log
  */
 const info = (message) => {
     // eslint-disable-next-line no-console
-    console.info(`[${colors.grey("cypress-sonarqube-reporter")}] ${message}`);
+    console.info(`[${chalk.grey(pkg.name)}] ${message}`);
 };
 
 /**
- * Log "error" message to the console
+ * Log 'error' message to the console, and throw an Error
  *
- * @param {string} message
+ * @param {string} message the error message
  */
-const error = (message) => {
+const throwError = (message) => {
     // eslint-disable-next-line no-console
-    console.error(`[${colors.red("cypress-sonarqube-reporter")}] ${message}`);
-    throw message;
+    console.error(`[${chalk.red(pkg.name)}] ${message}`);
+    throw new Error(message);
 };
 
 /**
@@ -44,16 +45,18 @@ const hasSpecInTitle = function (suite){
  */
 const extractSpecFromSuite = (suite, options) => {
     const title = suite.title;
-    const tag = "[@spec: ";
+    const tag = '[@spec: ';
     const index = title.indexOf(tag);
+    let spec;
     if (index > -1) {
-        let spec = JSON.parse(title.substring(index + tag.length, title.lastIndexOf("]")));
+        spec = JSON.parse(title.substring(index + tag.length, title.lastIndexOf(']')));
         spec = options.useAbsoluteSpecPath ? spec.absolute : spec.relative;
-        return spec.replace(/\\/g, "/");
+    } else if (suite.invocationDetails) {
+        spec = options.useAbsoluteSpecPath ? suite.invocationDetails.absoluteFile : suite.invocationDetails.relativeFile;
     } else {
-        const err = `could not find spec filename from title: ${title}`;
-        error(err);
+        throwError(`could not find spec filename from title: ${title} or from 'suite.invocationDetails'`);
     }
+    return spec.replace(/\\/g, '/');
 };
 
 /**
@@ -64,7 +67,7 @@ const extractSpecFromSuite = (suite, options) => {
  */
 const extractTitleFromSuite = (suite) => {
     const title = suite.title;
-    const index = title.indexOf("[@spec:");
+    const index = title.indexOf('[@spec:');
     if (index > -1) {
         return title.substring(0, index).trim();
     } else {
@@ -79,7 +82,7 @@ const extractTitleFromSuite = (suite) => {
  * @returns {string} the aggregation of title suite(s)
  */
 const formatSuiteTitle = (suite, options) => {
-    if (suite.parent && suite.parent.title !== "") {
+    if (suite.parent && suite.parent.title !== '') {
         return `${formatSuiteTitle(suite.parent, options)}${options.titleSeparator}${extractTitleFromSuite(suite)}`;
     } else {
         return extractTitleFromSuite(suite);
@@ -107,34 +110,34 @@ const formatTestTitle = (test, options) => {
  * @param {object} test the Mocha test
  */
 const formatTest = (node, test, options) => {
-    const testNode = node.element("testCase")
-        .attribute("name", formatTestTitle(test, options))
-        .attribute("duration", test.duration || 0);
+    const testNode = node.element('testCase')
+        .attribute('name', formatTestTitle(test, options))
+        .attribute('duration', test.duration || 0);
     switch (test.state) {
-        case "failed":
-            if (test.err.name === "AssertionError") {
-                testNode.element("failure")
-                    .attribute("message", `${test.err.name}: ${test.err.message}`)
+        case 'failed':
+            if (test.err.name === 'AssertionError') {
+                testNode.element('failure')
+                    .attribute('message', `${test.err.name}: ${test.err.message}`)
                     .cdata(test.err.stack);
             } else {
-                testNode.element("error")
-                    .attribute("message", `${test.err.name}: ${test.err.message}`)
+                testNode.element('error')
+                    .attribute('message', `${test.err.name}: ${test.err.message}`)
                     .cdata(test.err.stack);
             }
             break;
-        case "pending":
-            testNode.element("skipped")
-                .attribute("message", "skipped test");
+        case 'pending':
+            testNode.element('skipped')
+                .attribute('message', 'skipped test');
             break;
-        case "skipped":
-            testNode.element("skipped")
-                .attribute("message", "An error occurred during a hook and remaining tests in the current suite are skipped");
+        case 'skipped':
+            testNode.element('skipped')
+                .attribute('message', 'An error occurred during a hook and remaining tests in the current suite are skipped');
             break;
-        case "passed":
+        case 'passed':
             // nothing to do...
             break;
         default:
-            error(`unknown test state: ${test.state}`);
+            throwError(`unknown test state: ${test.state}`);
     }
 };
 
@@ -147,24 +150,26 @@ const writeFile = (specFilename, data, options) => {
     const specFilePath = (options.preserveSpecsDir) ? specFilename : path.basename(specFilename);
     const file = path.resolve(options.outputDir, path.dirname(specFilePath), `${options.prefix}${path.basename(specFilePath)}.xml`);
     if (!options.overwrite && fse.existsSync(file)) {
-        error(`the reporter "${file}" already exists`);
+        throwError(`the reporter '${file}' already exists`);
     } else {
         try {
-            fse.outputFileSync(file, data, "utf8");
-            info(`report saved to "${file}"`);
+            fse.outputFileSync(file, data, 'utf8');
+            info(`report saved to '${file}'`);
         } catch(err) {
-            error(`could not write file "${file}": ${err}`);
-            throw err;
+            throwError(`could not write file '${file}': ${err}`);
         }
     }
 };
 
 module.exports = {
+    DEFAULT_MERGED_FILE_NAME: 'cypress-sonarqube-reports.all.xml',
+    DEFAULT_OUTPUT_DIR: './dist',
     extractSpecFromSuite,
     extractTitleFromSuite,
     formatTest,
     formatTestTitle,
     formatSuiteTitle,
     writeFile,
-    hasSpecInTitle
+    hasSpecInTitle,
+    info
 };
